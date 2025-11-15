@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "random-roll-call"
+version = "1.0.0"
+description = "适用于课堂教学场景的随机点名软件"
+authors = [
+    {name = "Developer", email = "developer@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12"
+]
+
+dependencies = [
+    "PyQt6>=6.4.0",
+    "openpyxl>=3.1.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.2.0",
+    "pytest-qt>=4.2.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0"
+]
+
+[project.scripts]
+random-roll-call = "src.main:main"
+
+[project.urls]
+Homepage = "https://github.com/example/random-roll-call"
+Repository = "https://github.com/example/random-roll-call"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.2.0",
+    "pytest-qt>=4.2.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0"
+]
