@@ -226,53 +226,96 @@ class RandomRollCallApp(QMainWindow):
     
     def init_ui(self):
         """初始化用户界面"""
-        self.setWindowTitle('随机点名系统')
-        self.setGeometry(100, 100, 800, 600)
+        self.setWindowTitle('随机点名系统 - 智能教学助手')
+        self.setGeometry(100, 100, 900, 700)  # 增加窗口大小以改善布局
         
         # 设置主窗口样式
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #f0f8ff;
+                background-color: #f8f5f2;
             }
             QLabel {
-                color: #2c3e50;
-                font-size: 14px;
+                color: #232323;  /* 更深的颜色，提高对比度 */
+                font-size: 15px;
+                font-weight: bold;
             }
             QPushButton {
-                background-color: #3498db;
-                color: white;
+                background-color: #078080;
+                color: #fffffe;  /* 白色文字，更好对比 */
                 border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-size: 14px;
+                padding: 10px 16px;
+                border-radius: 6px;
+                font-size: 15px;
+                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background-color: #067070;
             }
             QPushButton:pressed {
-                background-color: #21618c;
+                background-color: #056060;
             }
             QPushButton#danger {
-                background-color: #e74c3c;
+                background-color: #f45d48;
+                color: #fffffe;
             }
             QPushButton#danger:hover {
-                background-color: #c0392b;
+                background-color: #e44d38;
             }
             QListWidget {
-                background-color: white;
-                border: 1px solid #bdc3c7;
-                border-radius: 4px;
+                background-color: #fffffe;
+                border: 2px solid #232323;  /* 更粗的边框 */
+                border-radius: 6px;
+                color: #232323;
+                font-size: 14px;
             }
             QGroupBox {
                 font-weight: bold;
-                border: 1px solid #bdc3c7;
-                border-radius: 4px;
+                font-size: 16px;
+                color: #232323;
+                border: 2px solid #078080;
+                border-radius: 8px;
                 margin-top: 1ex;
+                padding-top: 15px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
+                left: 15px;
+                padding: 5px 10px 5px 10px;
+                color: #232323;
+                background-color: #f8f5f2;
+                font-weight: bold;
+                font-size: 15px;
+            }
+            QComboBox {
+                background-color: #fffffe;
+                border: 2px solid #232323;
+                border-radius: 6px;
+                padding: 8px;
+                color: #232323;
+                font-size: 14px;
+            }
+            QComboBox:hover {
+                background-color: #f0efee;
+            }
+            QSpinBox {
+                background-color: #fffffe;
+                border: 2px solid #232323;
+                border-radius: 6px;
+                color: #232323;
+                padding: 5px;
+                font-size: 14px;
+            }
+            QTextEdit {
+                background-color: #fffffe;
+                border: 2px solid #232323;
+                border-radius: 6px;
+                color: #232323;
+                font-size: 14px;
+            }
+            QCheckBox {
+                color: #232323;
+                font-weight: bold;
+                font-size: 14px;
             }
         """)
         
@@ -396,16 +439,17 @@ class RandomRollCallApp(QMainWindow):
         self.current_result_label = QLabel("等待点名...")
         self.current_result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         font = QFont()
-        font.setPointSize(24)
+        font.setPointSize(26)  # 增大字体
         font.setBold(True)
         self.current_result_label.setFont(font)
         self.current_result_label.setStyleSheet("""
             QLabel {
-                background-color: #ecf0f1;
-                border: 2px dashed #3498db;
-                border-radius: 10px;
-                padding: 20px;
-                color: #2c3e50;
+                background-color: #fffffe;
+                border: 4px solid #078080;
+                border-radius: 20px;
+                padding: 40px;
+                color: #232323;
+                qproperty-alignment: 'AlignCenter';
             }
         """)
         current_layout.addWidget(self.current_result_label)
@@ -440,7 +484,7 @@ class RandomRollCallApp(QMainWindow):
         # 添加到分割器
         splitter.addWidget(left_widget)
         splitter.addWidget(right_widget)
-        splitter.setSizes([300, 500])
+        splitter.setSizes([400, 500])  # 调整比例使界面更平衡
         
         main_layout.addWidget(splitter)
         
@@ -990,13 +1034,14 @@ class RandomRollCallApp(QMainWindow):
             # 改变样式以增强动画效果
             self.current_result_label.setStyleSheet("""
                 QLabel {
-                    background-color: #e74c3c;
-                    border: 2px solid #c0392b;
-                    border-radius: 10px;
-                    padding: 20px;
-                    color: white;
-                    font-size: 28px;
+                    background-color: #f45d48;
+                    border: 4px solid #232323;
+                    border-radius: 20px;
+                    padding: 40px;
+                    color: #fffffe;
+                    font-size: 32px;  /* 更大字体 */
                     font-weight: bold;
+                    qproperty-alignment: 'AlignCenter';
                 }
             """)
             self.animation_counter += 1
@@ -1007,13 +1052,14 @@ class RandomRollCallApp(QMainWindow):
             # 恢复正常样式
             self.current_result_label.setStyleSheet("""
                 QLabel {
-                    background-color: #ecf0f1;
-                    border: 2px dashed #3498db;
-                    border-radius: 10px;
-                    padding: 20px;
-                    color: #2c3e50;
-                    font-size: 24px;
+                    background-color: #fffffe;
+                    border: 4px solid #078080;
+                    border-radius: 20px;
+                    padding: 40px;
+                    color: #232323;
+                    font-size: 28px;  /* 更大字体 */
                     font-weight: bold;
+                    qproperty-alignment: 'AlignCenter';
                 }
             """)
             self.start_btn.setEnabled(True)
@@ -1193,11 +1239,11 @@ def main():
     """主函数"""
     app = QApplication(sys.argv)
     app.setApplicationName("随机点名系统")
-    app.setWindowIcon(QIcon())  # 可以设置图标
-    
+    # app.setWindowIcon(QIcon("icon.png"))  # 可以设置图标，如果有的话
+
     window = RandomRollCallApp()
     window.show()
-    
+
     sys.exit(app.exec())
 
 
