@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import List, Dict, Optional
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QPushButton, QLabel, QListWidget, QFileDialog, QMessageBox,
-                             QGroupBox, QSpinBox, QCheckBox, QTextEdit, QSplitter)
+                             QGroupBox, QSpinBox, QCheckBox, QTextEdit, QSplitter, QComboBox)
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont, QIcon, QAction
 import sys
@@ -27,6 +27,7 @@ class DataStorage:
     def __init__(self, data_dir: str = "data"):
         self.data_dir = data_dir
         self.students_file = os.path.join(data_dir, "students.json")
+        self.classes_file = os.path.join(data_dir, "classes.json")  # New file for multiple classes
         self.history_file = os.path.join(data_dir, "history.json")
         self.config_file = os.path.join(data_dir, "config.json")
 
@@ -34,7 +35,8 @@ class DataStorage:
         os.makedirs(data_dir, exist_ok=True)
 
         # 初始化数据
-        self.students = self.load_students()
+        self.classes = self.load_classes()  # Dictionary of class_name -> student_list
+        self.current_class = self.load_current_class()  # Track current active class
         self.history = self.load_history()
         self.config = self.load_config()
     
@@ -53,8 +55,87 @@ class DataStorage:
                 return []
         return []
 
+    def load_classes(self) -> Dict[str, List[str]]:
+        """加载所有班级列表"""
+        if os.path.exists(self.classes_file):
+            try:
+                with open(self.classes_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return data.get('classes', {})
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                print(f"读取班级列表文件失败: {e}")
+                # 尝试 loading from old format
+                return self.migrate_from_old_format()
+            except Exception as e:
+                print(f"加载班级列表时发生未知错误: {e}")
+                return self.migrate_from_old_format()
+        else:
+            # Migrate from old format if classes file doesn't exist
+            return self.migrate_from_old_format()
+
+    def migrate_from_old_format(self) -> Dict[str, List[str]]:
+        """从旧格式迁移数据到新格式"""
+        # If there's an existing students.json, move it to a default class
+        if os.path.exists(self.students_file):
+            try:
+                with open(self.students_file, 'r', encoding='utf-8') as f:
+                    old_data = json.load(f)
+                    old_students = old_data.get('students', [])
+                    if old_students:
+                        return {"默认班级": old_students}
+            except:
+                pass  # If migration fails, start fresh
+        return {"默认班级": []}
+
+    def load_current_class(self) -> str:
+        """加载当前选中的班级"""
+        if os.path.exists(self.classes_file):
+            try:
+                with open(self.classes_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    return data.get('current_class', "默认班级")
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                print(f"读取当前班级失败: {e}")
+            except Exception as e:
+                print(f"加载当前班级时发生未知错误: {e}")
+        return "默认班级"
+
+    def save_classes(self):
+        """保存所有班级列表"""
+        try:
+            # 确保数据目录存在
+            os.makedirs(self.data_dir, exist_ok=True)
+
+            data = {
+                'classes': self.classes,
+                'current_class': self.current_class,
+                'timestamp': datetime.now().isoformat()
+            }
+            with open(self.classes_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except (OSError, IOError) as e:
+            print(f"保存班级列表失败: {e}")
+        except Exception as e:
+            print(f"保存班级列表时发生未知错误: {e}")
+
+    def get_current_students(self) -> List[str]:
+        """获取当前班级的学生列表"""
+        if self.current_class in self.classes:
+            return self.classes[self.current_class]
+        else:
+            # If current class doesn't exist, create it with empty list
+            self.classes[self.current_class] = []
+            return []
+
+    def set_current_students(self, students: List[str]):
+        """设置当前班级的学生列表"""
+        self.classes[self.current_class] = students
+        self.save_classes()
+
     def save_students(self, students: List[str]):
-        """保存学生名单"""
+        """保存学生名单（现在是当前选中班级的名单）"""
+        self.set_current_students(students)
+        # Also save to old format for compatibility (deprecated)
         try:
             # 确保数据目录存在
             os.makedirs(self.data_dir, exist_ok=True)
@@ -126,86 +207,20 @@ class DataStorage:
             print(f"保存配置时发生未知错误: {e}")
 
 
-class ExcelImporter:
-    """Excel导入器"""
-
-    @staticmethod
-    def import_from_excel(file_path: str) -> List[str]:
-        """从Excel文件导入学生姓名"""
-        try:
-            import pandas as pd
-
-            # 判断文件是否存在
-            if not os.path.exists(file_path):
-                raise FileNotFoundError(f"文件不存在: {file_path}")
-
-            # 判断文件扩展名
-            _, ext = os.path.splitext(file_path.lower())
-            if ext not in ['.xlsx', '.xls']:
-                raise ValueError(f"不支持的文件格式: {ext}，仅支持.xlsx和.xls")
-
-            # 尝试读取Excel文件
-            df = pd.read_excel(file_path)
-
-            # 假设第一列是学生姓名
-            if df.shape[1] >= 1:
-                # 获取第一列并去除空值
-                names = df.iloc[:, 0].dropna().astype(str).tolist()
-                # 去除空字符串和仅包含空白字符的字符串
-                names = [name.strip() for name in names if name.strip()]
-                return names
-            else:
-                raise ValueError("Excel文件至少需要一列数据")
-        except Exception as e:
-            raise e
-
-    @staticmethod
-    def validate_data(names: List[str]) -> dict:
-        """验证导入的数据"""
-        result = {
-            'valid': True,
-            'errors': [],
-            'warnings': [],
-            'count': len(names)
-        }
-
-        # 检查是否有重复姓名
-        unique_names = set(names)
-        if len(unique_names) != len(names):
-            duplicate_count = len(names) - len(unique_names)
-            result['warnings'].append(f"发现 {duplicate_count} 个重复姓名")
-
-        # 检查姓名长度
-        for i, name in enumerate(names):
-            if len(name) > 50:
-                result['warnings'].append(f"第 {i+1} 行姓名过长: {name[:20]}...")
-
-        # 检查特殊字符（可以根据需要调整）
-        import re
-        invalid_pattern = re.compile(r'[!@#$%^&*()+=\[\]{}|\\:";\'<>?,./]')
-        for i, name in enumerate(names):
-            if invalid_pattern.search(name):
-                result['errors'].append(f"第 {i+1} 行姓名包含无效字符: {name}")
-
-        if result['errors']:
-            result['valid'] = False
-
-        return result
-
-
 class RandomRollCallApp(QMainWindow):
     """随机点名软件主窗口"""
     
     def __init__(self):
         super().__init__()
         self.data_storage = DataStorage()
-        self.students = self.data_storage.students.copy()
+        self.students = self.data_storage.get_current_students().copy()
         self.history = self.data_storage.history.copy()
         self.current_names = []
         self.roll_call_timer = None
         self.animation_counter = 0
         self.animation_names = []
-        
+        self.allow_duplicate_names = False  # 是否允许重复姓名
+
         self.init_ui()
         self.load_settings()
     
@@ -273,25 +288,67 @@ class RandomRollCallApp(QMainWindow):
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
         
+        # 班级选择分组
+        class_group = QGroupBox("班级管理")
+        class_layout = QVBoxLayout(class_group)
+
+        # 班级选择下拉框
+        class_selector_layout = QHBoxLayout()
+        class_selector_layout.addWidget(QLabel("选择班级:"))
+        self.class_selector = QComboBox()
+        self.update_class_selector()  # 初始化下拉框
+        self.class_selector.currentTextChanged.connect(self.on_class_changed)
+        class_selector_layout.addWidget(self.class_selector)
+        class_layout.addLayout(class_selector_layout)
+
+        # 班级操作按钮
+        class_btn_layout = QHBoxLayout()
+
+        add_class_btn = QPushButton("添加班级")
+        add_class_btn.clicked.connect(self.add_class)
+        class_btn_layout.addWidget(add_class_btn)
+
+        rename_class_btn = QPushButton("重命名班级")
+        rename_class_btn.clicked.connect(self.rename_class)
+        class_btn_layout.addWidget(rename_class_btn)
+
+        delete_class_btn = QPushButton("删除班级")
+        delete_class_btn.clicked.connect(self.delete_class)
+        class_btn_layout.addWidget(delete_class_btn)
+
+        class_layout.addLayout(class_btn_layout)
+
+        left_layout.addWidget(class_group)
+
         # 学生名单分组
         students_group = QGroupBox("学生名单")
         students_layout = QVBoxLayout(students_group)
-        
+
         self.students_list = QListWidget()
         self.update_students_list()
         students_layout.addWidget(self.students_list)
-        
+
         # 导入名单按钮
         import_btn = QPushButton("导入名单")
         import_btn.clicked.connect(self.import_students)
         students_layout.addWidget(import_btn)
-        
+
+        # 手动输入按钮
+        manual_input_btn = QPushButton("手动添加姓名")
+        manual_input_btn.clicked.connect(self.manual_input_student)
+        students_layout.addWidget(manual_input_btn)
+
+        # 手动移除按钮
+        manual_remove_btn = QPushButton("移除选中姓名")
+        manual_remove_btn.clicked.connect(self.manual_remove_student)
+        students_layout.addWidget(manual_remove_btn)
+
         left_layout.addWidget(students_group)
-        
+
         # 设置分组
         settings_group = QGroupBox("设置")
         settings_layout = QVBoxLayout(settings_group)
-        
+
         # 点名人数选择
         num_layout = QHBoxLayout()
         num_layout.addWidget(QLabel("点名人数:"))
@@ -301,13 +358,13 @@ class RandomRollCallApp(QMainWindow):
         self.num_spinbox.valueChanged.connect(self.on_num_changed)
         num_layout.addWidget(self.num_spinbox)
         settings_layout.addLayout(num_layout)
-        
+
         # 防重复选项
         self.prevent_duplicate_cb = QCheckBox("防重复点名")
         self.prevent_duplicate_cb.setChecked(self.data_storage.config.get('prevent_duplicate', True))
         self.prevent_duplicate_cb.stateChanged.connect(self.on_prevent_duplicate_changed)
         settings_layout.addWidget(self.prevent_duplicate_cb)
-        
+
         left_layout.addWidget(settings_group)
         
         # 按钮区域
@@ -424,10 +481,14 @@ class RandomRollCallApp(QMainWindow):
         
         # 工具菜单
         tools_menu = menubar.addMenu('工具')
-        
+
         stats_action = QAction('统计信息', self)
         stats_action.triggered.connect(self.show_statistics)
         tools_menu.addAction(stats_action)
+
+        clear_all_action = QAction('清空学生名单', self)
+        clear_all_action.triggered.connect(self.clear_all_students)
+        tools_menu.addAction(clear_all_action)
     
     def load_settings(self):
         """加载设置"""
@@ -435,14 +496,35 @@ class RandomRollCallApp(QMainWindow):
         geometry = config.get('window_geometry', [100, 100, 800, 600])
         self.setGeometry(*geometry)
 
+    def clear_all_students(self):
+        """清空所有学生名单"""
+        if not self.students:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "提示", "学生名单已经是空的！")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "确认清空",
+            f"确定要清空所有 {len(self.students)} 个学生姓名吗？此操作不可恢复。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self.students = []
+            self.update_students_list()
+            self.data_storage.set_current_students(self.students)  # Use the new method
+            self.data_storage.save_classes()  # Save all class data
+            QMessageBox.information(self, "成功", "学生名单已清空！")
+
     def closeEvent(self, event):
         """窗口关闭事件"""
         # 保存当前配置
         self.save_settings()
         # 保存数据
-        self.data_storage.students = self.students
+        self.data_storage.set_current_students(self.students)  # Use the new method
         self.data_storage.history = self.history
-        self.data_storage.save_students(self.students)
+        self.data_storage.save_classes()  # Save all class data
         self.data_storage.save_history(self.history)
 
         event.accept()
@@ -477,8 +559,8 @@ class RandomRollCallApp(QMainWindow):
         try:
             new_students = ExcelImporter.import_from_excel(file_path)
 
-            # 验证数据
-            validation_result = ExcelImporter.validate_data(new_students)
+            # 验证数据，传入现有的学生名单进行重复检查
+            validation_result = ExcelImporter.validate_data(new_students, self.students)
 
             if not validation_result['valid']:
                 error_msg = "\n".join(validation_result['errors'])
@@ -510,24 +592,35 @@ class RandomRollCallApp(QMainWindow):
                 reply = QMessageBox.question(
                     self,
                     "确认",
-                    f"发现 {len(duplicates)} 个重复姓名，是否继续？\n重复姓名: {', '.join(list(duplicates)[:5])}{'...' if len(duplicates) > 5 else ''}",
+                    f"发现 {len(duplicates)} 个重复姓名，是否继续导入（包括重复的）？\n重复姓名: {', '.join(list(duplicates)[:5])}{'...' if len(duplicates) > 5 else ''}",
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                 )
 
                 if reply == QMessageBox.StandardButton.No:
-                    return
-
-            # 合并名单
-            self.students = list(existing_set.union(new_set))
+                    # 只导入不重复的学生
+                    new_students = [name for name in new_students if name not in existing_set]
+                    # 仍然使用智能合并方法，但不保留重复项
+                    self.students = self.merge_student_lists(self.students, new_students, keep_duplicates=False)
+                else:
+                    # 导入所有学生，包括重复的
+                    self.students = self.merge_student_lists(self.students, new_students, keep_duplicates=True)
+            else:
+                # 没有重复，直接导入
+                self.students = self.merge_student_lists(self.students, new_students, keep_duplicates=True)
 
             # 更新界面
             self.update_students_list()
-            self.data_storage.students = self.students
-            self.data_storage.save_students(self.students)
+            self.data_storage.set_current_students(self.students)  # Use the new method
+            self.data_storage.save_classes()  # Save all class data
 
             success_msg = f"成功导入 {len(new_students)} 个学生姓名！\n当前总人数: {len(self.students)}"
             if validation_result['warnings']:
                 success_msg += f"\n(包含{len(validation_result['warnings'])}个警告)"
+
+            # 如果有重复姓名，在消息中显示详情
+            if validation_result['duplicates']:
+                dup_msg = f"\n重复姓名: {', '.join(validation_result['duplicates'][:5])}{'...' if len(validation_result['duplicates']) > 5 else ''}"
+                success_msg += dup_msg
 
             QMessageBox.information(self, "成功", success_msg)
 
@@ -540,6 +633,308 @@ class RandomRollCallApp(QMainWindow):
             import traceback
             print(f"导入异常: {traceback.format_exc()}")
     
+    def manual_input_student(self):
+        """手动添加学生姓名"""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox
+
+        # 创建对话框
+        dialog = QDialog(self)
+        dialog.setWindowTitle("手动添加学生姓名")
+        dialog.setGeometry(300, 300, 400, 150)
+
+        layout = QVBoxLayout(dialog)
+
+        # 输入框
+        input_layout = QHBoxLayout()
+        input_layout.addWidget(QLabel("学生姓名:"))
+        name_input = QLineEdit()
+        name_input.setPlaceholderText("输入学生姓名，多个姓名用逗号分隔")
+        input_layout.addWidget(name_input)
+        layout.addLayout(input_layout)
+
+        # 按钮
+        button_layout = QHBoxLayout()
+
+        add_btn = QPushButton("添加")
+        add_btn.clicked.connect(dialog.accept)
+        button_layout.addWidget(add_btn)
+
+        cancel_btn = QPushButton("取消")
+        cancel_btn.clicked.connect(dialog.reject)
+        button_layout.addWidget(cancel_btn)
+
+        layout.addLayout(button_layout)
+
+        # 显示对话框
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            input_text = name_input.text().strip()
+            if not input_text:
+                QMessageBox.warning(self, "警告", "请输入学生姓名！")
+                return
+
+            # 分割输入的姓名（支持逗号分隔）
+            new_names = [name.strip() for name in input_text.split(',') if name.strip()]
+
+            if not new_names:
+                QMessageBox.warning(self, "警告", "未检测到有效姓名！")
+                return
+
+            # 验证输入的姓名
+            validation_result = ExcelImporter.validate_data(new_names, self.students)
+
+            if not validation_result['valid']:
+                error_msg = "\n".join(validation_result['errors'])
+                QMessageBox.critical(self, "输入验证失败", f"输入包含错误:\n{error_msg}")
+                return
+
+            # 询问是否保留重复姓名
+            if validation_result['warnings']:
+                warning_msg = "\n".join(validation_result['warnings'])
+                reply = QMessageBox.question(
+                    self,
+                    "输入验证警告",
+                    f"输入包含警告:\n{warning_msg}\n\n是否继续添加？",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.No:
+                    return
+
+            # 检查是否有重复（内部重复或与现有名单重复）
+            existing_set = set(self.students)
+            unique_new_names = set()
+            for name in new_names:
+                if name not in existing_set and name not in unique_new_names:
+                    unique_new_names.add(name)
+
+            # 询问是否添加重复姓名
+            duplicate_with_existing = [name for name in new_names if name in existing_set]
+            unique_new = [name for name in new_names if name not in existing_set]
+
+            if duplicate_with_existing and unique_new:
+                # 有重复也有不重复的，询问如何处理
+                reply = QMessageBox.question(
+                    self,
+                    "重复姓名",
+                    f"发现 {len(duplicate_with_existing)} 个重复姓名，是否继续导入（包括重复的）？\n重复姓名: {', '.join(duplicate_with_existing[:5])}{'...' if len(duplicate_with_existing) > 5 else ''}",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+
+                if reply == QMessageBox.StandardButton.Yes:
+                    # 导入所有姓名，包括重复的
+                    names_to_add = new_names
+                else:
+                    # 只导入不重复的姓名
+                    names_to_add = unique_new
+            elif duplicate_with_existing and not unique_new:
+                # 所有输入都与现有名单重复
+                reply = QMessageBox.question(
+                    self,
+                    "重复姓名",
+                    f"所有输入的姓名都已存在，是否仍然添加？\n姓名: {', '.join(duplicate_with_existing[:5])}{'...' if len(duplicate_with_existing) > 5 else ''}",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    names_to_add = duplicate_with_existing
+                else:
+                    names_to_add = []  # 不添加任何姓名
+            else:
+                # 没有重复，全部导入
+                names_to_add = new_names
+
+            # 添加新姓名到列表
+            added_count = 0
+            for name in names_to_add:
+                self.students.append(name)  # 允许添加（包括可能的重复）
+                added_count += 1
+
+            # 更新界面
+            self.update_students_list()
+            self.data_storage.set_current_students(self.students)  # Use the new method
+            self.data_storage.save_classes()  # Save all class data
+
+            success_msg = f"成功添加 {added_count} 个新学生姓名！\n当前总人数: {len(self.students)}"
+
+            # 如果有重复姓名，在消息中显示详情
+            if validation_result['duplicates']:
+                dup_msg = f"\n重复姓名已跳过: {', '.join(validation_result['duplicates'][:5])}{'...' if len(validation_result['duplicates']) > 5 else ''}"
+                success_msg += dup_msg
+
+            QMessageBox.information(self, "成功", success_msg)
+
+    def manual_remove_student(self):
+        """手动移除选中的学生姓名"""
+        from PyQt6.QtWidgets import QMessageBox
+
+        # 获取选中的项目
+        selected_items = self.students_list.selectedItems()
+
+        if not selected_items:
+            QMessageBox.information(self, "提示", "请先选择要移除的学生姓名！")
+            return
+
+        # 获取要移除的姓名
+        names_to_remove = [item.text() for item in selected_items]
+
+        # 确认删除
+        reply = QMessageBox.question(
+            self,
+            "确认删除",
+            f"确定要删除选中的 {len(names_to_remove)} 个学生姓名吗？\n{', '.join(names_to_remove[:5])}{'...' if len(names_to_remove) > 5 else ''}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            # 从学生列表中移除选中的姓名
+            for name in names_to_remove:
+                if name in self.students:
+                    self.students.remove(name)
+
+            # 更新界面
+            self.update_students_list()
+            self.data_storage.set_current_students(self.students)  # Use the new method
+            self.data_storage.save_classes()  # Save all class data
+
+            QMessageBox.information(
+                self,
+                "成功",
+                f"成功删除 {len(names_to_remove)} 个学生姓名！\n当前总人数: {len(self.students)}"
+            )
+
+    def merge_student_lists(self, existing_list: List[str], new_list: List[str], keep_duplicates: bool = False) -> List[str]:
+        """智能合并学生名单，处理重复项"""
+        # 使用现有列表作为基础
+        result = existing_list.copy()
+
+        if keep_duplicates:
+            # If allowed to keep duplicates, simply append all new names
+            result.extend(new_list)
+        else:
+            # Add only new names that don't already exist
+            existing_set = set(existing_list)
+            for student in new_list:
+                if student not in existing_set:
+                    result.append(student)
+                    existing_set.add(student)
+
+        return result
+
+    def update_class_selector(self):
+        """更新班级选择下拉框"""
+        self.class_selector.clear()
+        class_names = list(self.data_storage.classes.keys())
+        self.class_selector.addItems(class_names)
+
+        # Set the current class as selected
+        if self.data_storage.current_class in class_names:
+            self.class_selector.setCurrentText(self.data_storage.current_class)
+
+    def on_class_changed(self, class_name: str):
+        """班级选择改变时的处理"""
+        if class_name and class_name != self.data_storage.current_class:
+            # Save current class data before switching
+            self.data_storage.set_current_students(self.students)
+
+            # Update current class
+            self.data_storage.current_class = class_name
+
+            # Load new class data
+            self.students = self.data_storage.get_current_students().copy()
+            self.update_students_list()
+
+            # Save the updated current class setting
+            self.data_storage.save_classes()
+
+    def add_class(self):
+        """添加新班级"""
+        from PyQt6.QtWidgets import QInputDialog
+
+        new_class, ok = QInputDialog.getText(self, "添加班级", "请输入新班级名称:")
+        if ok and new_class.strip():
+            new_class = new_class.strip()
+            if new_class in self.data_storage.classes:
+                QMessageBox.warning(self, "警告", f"班级 '{new_class}' 已存在！")
+                return
+
+            # Add the new class with empty student list
+            self.data_storage.classes[new_class] = []
+            self.data_storage.save_classes()
+
+            # Update the selector and switch to the new class
+            self.update_class_selector()
+            self.class_selector.setCurrentText(new_class)
+
+            QMessageBox.information(self, "成功", f"班级 '{new_class}' 添加成功！")
+        elif ok:
+            QMessageBox.warning(self, "警告", "班级名称不能为空！")
+
+    def rename_class(self):
+        """重命名当前班级"""
+        from PyQt6.QtWidgets import QInputDialog
+
+        current_class = self.data_storage.current_class
+        if current_class == "默认班级" and len(self.data_storage.classes) == 1:
+            QMessageBox.information(self, "提示", "不能重命名最后一个默认班级！")
+            return
+
+        new_name, ok = QInputDialog.getText(self, "重命名班级", f"请输入新班级名称:", text=current_class)
+        if ok and new_name.strip() and new_name.strip() != current_class:
+            new_name = new_name.strip()
+            if new_name in self.data_storage.classes:
+                QMessageBox.warning(self, "警告", f"班级 '{new_name}' 已存在！")
+                return
+
+            # Save current students before renaming
+            current_students = self.data_storage.get_current_students()
+
+            # Remove old class and add new one
+            del self.data_storage.classes[current_class]
+            self.data_storage.classes[new_name] = current_students
+            self.data_storage.current_class = new_name
+
+            self.data_storage.save_classes()
+
+            # Update UI
+            self.update_class_selector()
+            self.class_selector.setCurrentText(new_name)
+
+            QMessageBox.information(self, "成功", f"班级已重命名为 '{new_name}'！")
+        elif ok and new_name.strip() == current_class:
+            QMessageBox.information(self, "提示", "新名称与当前名称相同，无需重命名。")
+        elif ok:
+            QMessageBox.warning(self, "警告", "班级名称不能为空！")
+
+    def delete_class(self):
+        """删除当前班级"""
+        current_class = self.data_storage.current_class
+        if len(self.data_storage.classes) <= 1:
+            QMessageBox.warning(self, "警告", "不能删除最后一个班级！")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "确认删除",
+            f"确定要删除班级 '{current_class}' 吗？此操作不可恢复。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            # Delete the class
+            del self.data_storage.classes[current_class]
+
+            # Switch to the first available class
+            available_classes = list(self.data_storage.classes.keys())
+            self.data_storage.current_class = available_classes[0]
+
+            # Update current students to the new class
+            self.students = self.data_storage.get_current_students().copy()
+
+            self.data_storage.save_classes()
+
+            # Update UI
+            self.update_class_selector()
+            self.update_students_list()
+            QMessageBox.information(self, "成功", f"班级 '{current_class}' 已删除，已切换到 '{available_classes[0]}'。")
+
     def update_students_list(self):
         """更新学生名单列表"""
         self.students_list.clear()
@@ -700,17 +1095,17 @@ class RandomRollCallApp(QMainWindow):
     def reset_students(self):
         """重置学生名单"""
         reply = QMessageBox.question(
-            self, 
-            "确认", 
+            self,
+            "确认",
             "确定要清空当前学生名单吗？此操作不可恢复。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
-        
+
         if reply == QMessageBox.StandardButton.Yes:
             self.students = []
             self.update_students_list()
-            self.data_storage.students = self.students
-            self.data_storage.save_students(self.students)
+            self.data_storage.set_current_students(self.students)  # Use the new method
+            self.data_storage.save_classes()  # Save all class data
     
     def view_history(self):
         """查看详细历史记录"""

@@ -18,6 +18,7 @@ a = Analysis(
     datas=[
         ('template.xlsx', '.'),
         ('docs', 'docs'),
+        ('data', 'data'),
     ],
     hiddenimports=['excel_importer', 'pandas', 'numpy', 'openpyxl'],
     hookspath=[],

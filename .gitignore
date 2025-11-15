@@ -1,0 +1,67 @@
+# --- Python bytecode & caches ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# C extensions
+*.so
+*.pyd
+*.dll
+*.dylib
+
+# --- Packaging / build artifacts ---
+# setuptools / egg
+*.egg
+*.egg-info/
+.eggs/
+src/**/*.egg-info/
+
+# build outputs
+build/
+dist/
+
+# PyInstaller
+# (often creates a build/ and dist/ plus .spec)
+*.spec
+
+# Wheel / pip
+pip-wheel-metadata/
+
+# --- Test & coverage ---
+.pytest_cache/
+.coverage*
+htmlcov/
+.tox/
+.nox/
+
+# Type checkers / analyzers
+.mypy_cache/
+.pyre/
+.pytype/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- IDE / Editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS / Misc ---
+.DS_Store
+Thumbs.db
+*.log
+
+# --- Docs build (keep source docs/) ---
+docs/_build/
+
+# --- Project specific ---
+# Keep data/ JSON tracked; do NOT ignore data/
+# Ignore PyInstaller analysis artifacts if they appear elsewhere
+**/warn-*.txt
+**/xref-*.html
